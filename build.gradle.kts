@@ -6,7 +6,7 @@ plugins {
     id("net.minecrell.plugin-yml.bukkit") version "0.6.0"
 }
 
-group = "gg.hjk.domination"
+group = "gg.hjk"
 version = "0.5-SNAPSHOT"
 description = "Display an embarrassing chain of deaths to your friends and rivals."
 project.ext["author"] = "hjk321"
@@ -15,12 +15,14 @@ project.ext["url"] = "https://hangar.papermc.io/hjk321/Domination"
 repositories {
     mavenCentral()
     maven("https://repo.papermc.io/repository/maven-public/")
+    maven("https://jitpack.io")
 }
 
 dependencies {
     paperweight.paperDevBundle("1.21.7-R0.1-SNAPSHOT")
     implementation("io.papermc:paper-trail:1.0.1")
     implementation("org.bstats:bstats-bukkit:3.1.0")
+    compileOnly("gg.hjk:secondwind:main-SNAPSHOT")
 }
 
 kotlin {
@@ -30,6 +32,9 @@ kotlin {
 paper {
     apiVersion = "1.21.7"
     main = "gg.hjk.domination.Domination"
+    serverDependencies {
+        register("SecondWind")
+    }
 }
 
 bukkit {
