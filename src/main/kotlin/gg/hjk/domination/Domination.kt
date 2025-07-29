@@ -7,6 +7,7 @@ import gg.hjk.secondwind.api.PlayerSecondWindEvent
 import net.kyori.adventure.text.minimessage.MiniMessage
 import org.bstats.bukkit.Metrics
 import org.bukkit.Bukkit
+import org.bukkit.craftbukkit.entity.CraftLivingEntity
 import org.bukkit.craftbukkit.entity.CraftPlayer
 import org.bukkit.entity.Entity
 import org.bukkit.entity.Mob
@@ -142,6 +143,9 @@ class Domination : JavaPlugin(), Listener {
 
         var killer = event.damageSource.causingEntity
         if (killer == null) {
+            // Try another, player-specific method
+            killer = event.player.killer
+
             // Attempt to get killer for falling death
             val mostSignificantFall = event.player.combatTracker.computeMostSignificantFall()
             if (mostSignificantFall != null)
@@ -158,6 +162,19 @@ class Domination : JavaPlugin(), Listener {
         if (player.uniqueId == killer.uniqueId)
             return
         cachedKillers[event.player.uniqueId] = Killer(killer)
+
+        // If the killer isn't mentioned in the death message, we'll append it for clarity
+        // TODO better checks and do the hover/insert components. For example, handle custom names
+        val message = MiniMessage.miniMessage().serialize(event.deathMessage)
+        if (killer !is Player && !message.contains("<lang:${killer.type.translationKey()}>")) {
+            event.deathMessage = event.deathMessage.append(MiniMessage.miniMessage().deserialize(
+                " while fighting <lang:${killer.type.translationKey()}>"
+            ))
+        } else if (killer is Player && !message.contains("player:${killer.uniqueId}")) {
+            event.deathMessage = event.deathMessage.append(MiniMessage.miniMessage().deserialize(
+                " while fighting ${killer.name}"
+            ))
+        }
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
@@ -168,16 +185,36 @@ class Domination : JavaPlugin(), Listener {
 
     @EventHandler(priority = EventPriority.MONITOR)
     fun checkForRevenge(event: EntityDeathEvent) {
-        val player = event.damageSource.causingEntity as? Player ?: return
+        var killer = event.damageSource.causingEntity
+        if (killer == null) {
+            // Try another, player-specific method
+            killer = event.entity.killer
+
+            // Attempt to get killer for falling death
+            if (killer == null) {
+                val mostSignificantFall = event.entity.combatTracker.computeMostSignificantFall()
+                if (mostSignificantFall != null)
+                    killer = mostSignificantFall.damageSource.causingEntity
+            }
+
+            // Attempt to get killer via nms for indirect kills (e.g. lava)
+            if (killer == null && event.entity is CraftLivingEntity) {
+                killer = (event.entity as CraftLivingEntity).handle.killCredit?.bukkitLivingEntity
+            }
+        }
+
+        if (killer !is Player)
+            return
+
         val key = if (event.entity is Player) event.entity.uniqueId.toString() else event.entity.type.toString()
 
-        val tracker = deathTracker[player.uniqueId] ?: return
+        val tracker = deathTracker[killer.uniqueId] ?: return
         val timesKilled = tracker[key] ?: 0
 
         if (timesKilled >= DOMINATION_AT) {
             tracker.remove(key) // Clear the domination streak
             val displayName = if (event.entity is Player) event.entity.name else "<lang:${event.entity.type.translationKey()}>"
-            val playerName = player.name
+            val playerName = killer.name
             Bukkit.getScheduler().runTaskLater(this, Runnable {
                 val message = MiniMessage.miniMessage().deserialize(
                     "$playerName <bold><gradient:#ffaaaa:#ff1111>GOT REVENGE ON</gradient></bold> $displayName")
