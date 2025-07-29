@@ -5,6 +5,7 @@ import com.google.gson.reflect.TypeToken
 import gg.hjk.secondwind.api.PlayerDeathAfterKnockDownEvent
 import gg.hjk.secondwind.api.PlayerKnockDownEvent
 import gg.hjk.secondwind.api.PlayerSecondWindEvent
+import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.minimessage.MiniMessage
 import org.bstats.bukkit.Metrics
 import org.bukkit.Bukkit
@@ -98,7 +99,7 @@ class Domination : JavaPlugin(), Listener {
 
     inner class Killer(entity: Entity) {
         val isPlayer = entity is Player
-        val id = if (isPlayer) entity.uniqueId.toString() else entity.type.toString()
+        val id = if (isPlayer) entity.uniqueId.toString() else entity.type.key.toString()
         val name = if (isPlayer) entity.name else entity.type.translationKey()
     }
 
@@ -154,7 +155,7 @@ class Domination : JavaPlugin(), Listener {
         else if (timesKilled == DOMINATION_AT) {
             Bukkit.getScheduler().runTaskLater(this, Runnable {
                 val message = MiniMessage.miniMessage().deserialize(
-                    "$displayName <bold><gradient:#ffaaaa:#ff1111>IS DOMINATING</gradient></bold> $playerName")
+                    "$displayName <bold><gradient:#ffaaaa:#ff5555>IS DOMINATING</gradient></bold> $playerName")
                 Bukkit.getServer().broadcast(message)
             }, 1L)
             return
@@ -169,7 +170,7 @@ class Domination : JavaPlugin(), Listener {
         event.deathMessage(component)
     }
 
-    @EventHandler(priority = EventPriority.MONITOR)
+    @EventHandler(priority = EventPriority.HIGHEST)
     fun cacheKiller(event: PlayerKnockDownEvent) {
         val player = event.player
         cachedKillers.remove(player.uniqueId)
@@ -197,11 +198,12 @@ class Domination : JavaPlugin(), Listener {
         cachedKillers[event.player.uniqueId] = Killer(killer)
 
         // If the killer isn't mentioned in the death message, we'll append it for clarity
-        // TODO better checks and do the hover/insert components. For example, handle custom names
+        // TODO do the hover/insert components.
         val message = MiniMessage.miniMessage().serialize(event.deathMessage)
-        if (killer !is Player && !message.contains("<lang:${killer.type.translationKey()}>")) {
+        val customName = MiniMessage.miniMessage().serialize(killer.customName() ?: Component.empty())
+        if (killer !is Player && !message.contains(":${killer.uniqueId}")) {
             event.deathMessage = event.deathMessage.append(MiniMessage.miniMessage().deserialize(
-                " while fighting <lang:${killer.type.translationKey()}>"
+                " while fighting ${customName.ifEmpty { "<lang:${killer.type.translationKey()}>" }}"
             ))
         } else if (killer is Player && !message.contains("player:${killer.uniqueId}")) {
             event.deathMessage = event.deathMessage.append(MiniMessage.miniMessage().deserialize(
@@ -242,7 +244,7 @@ class Domination : JavaPlugin(), Listener {
         if (killer !is Player)
             return
 
-        val key = event.entity.type.toString()
+        val key = event.entity.type.key.toString()
 
         val tracker = deathTracker[killer.uniqueId] ?: return
         val timesKilled = tracker[key] ?: 0
@@ -253,7 +255,7 @@ class Domination : JavaPlugin(), Listener {
             val playerName = killer.name
             Bukkit.getScheduler().runTaskLater(this, Runnable {
                 val message = MiniMessage.miniMessage().deserialize(
-                    "$playerName <bold><gradient:#ffaaaa:#ff1111>GOT REVENGE ON</gradient></bold> $displayName")
+                    "$playerName <bold><gradient:#ffaaaa:#ff5555>GOT REVENGE ON</gradient></bold> $displayName")
                 Bukkit.getServer().broadcast(message)
             }, 1L)
         }
@@ -276,7 +278,7 @@ class Domination : JavaPlugin(), Listener {
                 val offlineKiller = Bukkit.getServer().getOfflinePlayer(killerUuid)
                 val killerName = offlineKiller.name ?: return@Runnable
                 val message = MiniMessage.miniMessage().deserialize(
-                    "$killerName <bold><gradient:#ffaaaa:#ff1111>GOT REVENGE ON</gradient></bold> ${event.player.name}")
+                    "$killerName <bold><gradient:#ffaaaa:#ff5555>GOT REVENGE ON</gradient></bold> ${event.player.name}")
                 Bukkit.getServer().broadcast(message)
             }, 1L)
         }
