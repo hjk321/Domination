@@ -102,6 +102,38 @@ class Domination : JavaPlugin(), Listener {
         val name = if (isPlayer) entity.name else entity.type.translationKey()
     }
 
+    fun getKillstreakColorTag(kills: Int, killOffset: Int): Pair<String, String> {
+        val killstreakTiers = listOf(
+            "white",              // 0
+            "green",              // 5
+            "#ff9900",            // 10
+            "dark_purple",        // 15
+            "yellow",             // 20
+            "blue",               // 25
+            "red",                // 30
+            "light_purple",       // 35
+            "aqua",               // 40
+            "#ffb0ff",            // 45
+        )
+
+        val k = kills + killOffset
+        return if (kills >= 1000) {
+            Pair("<rainbow><bold>◎$k</bold></rainbow>", "<rainbow><bold>$k</bold></rainbow>")
+        } else if (kills >= 500) {
+            val nonBoldTag = getKillstreakColorTag(kills - 500, 500)
+            Pair("<bold>${nonBoldTag.first}</bold>", "<bold>${nonBoldTag.second}</bold>")
+        } else if (kills >= 50) {
+            val firstColor = killstreakTiers[kills / 50]
+            var secondColor = killstreakTiers[(kills % 50) / 5]
+            if (secondColor == firstColor)
+                secondColor = "white"
+            Pair("<gradient:$firstColor:$secondColor>◎$k</gradient>", "<gradient:$firstColor:$secondColor>$k</gradient>")
+        } else {
+            val color = killstreakTiers[kills / 5]
+            Pair("<color:$color>◎$k</color>", "<color:$color>$k</color>")
+        }
+    }
+
     // ------------------------
 
     @EventHandler(priority = EventPriority.HIGH)
@@ -129,9 +161,10 @@ class Domination : JavaPlugin(), Listener {
         }
 
         var component = event.deathMessage() ?: return
+        val tag = getKillstreakColorTag(timesKilled, 0)
         component = component.append(MiniMessage.miniMessage().deserialize(
-            " <hover:show_text:'<green>${timesKilled} <gray>consecutive deaths to ${displayName}'>" +
-                    "<gray>(<green>◎${timesKilled}<gray>)</hover>"
+            " <hover:show_text:'${tag.second} <gray>consecutive deaths to ${displayName}'>" +
+                    "<gray>(${tag.first}<gray>)</hover>"
         ))
         event.deathMessage(component)
     }
