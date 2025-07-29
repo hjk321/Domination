@@ -2,6 +2,7 @@ package gg.hjk.domination
 
 import com.google.gson.GsonBuilder
 import com.google.gson.reflect.TypeToken
+import gg.hjk.secondwind.api.PlayerDeathAfterKnockDownEvent
 import gg.hjk.secondwind.api.PlayerKnockDownEvent
 import gg.hjk.secondwind.api.PlayerSecondWindEvent
 import net.kyori.adventure.text.minimessage.MiniMessage
@@ -112,7 +113,6 @@ class Domination : JavaPlugin(), Listener {
         val displayName = if (killer.isPlayer) killer.name else "<lang:${killer.name}>"
         val playerName = event.player.name
 
-        // computeIfAbsent ensures the inner map is created if it doesn't exist.
         val tracker = deathTracker.computeIfAbsent(event.player.uniqueId) { HashMap() }
         val timesKilled = tracker.getOrDefault(killer.id, 0) + 1
         tracker[killer.id] = timesKilled
@@ -184,7 +184,10 @@ class Domination : JavaPlugin(), Listener {
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
-    fun checkForRevenge(event: EntityDeathEvent) {
+    fun checkForEntityRevenge(event: EntityDeathEvent) {
+        if (event.entity is Player)
+            return // revenge handled elsewhere when supporting secondwind
+
         var killer = event.damageSource.causingEntity
         if (killer == null) {
             // Try another, player-specific method
@@ -206,18 +209,41 @@ class Domination : JavaPlugin(), Listener {
         if (killer !is Player)
             return
 
-        val key = if (event.entity is Player) event.entity.uniqueId.toString() else event.entity.type.toString()
+        val key = event.entity.type.toString()
 
         val tracker = deathTracker[killer.uniqueId] ?: return
         val timesKilled = tracker[key] ?: 0
 
         if (timesKilled >= DOMINATION_AT) {
             tracker.remove(key) // Clear the domination streak
-            val displayName = if (event.entity is Player) event.entity.name else "<lang:${event.entity.type.translationKey()}>"
+            val displayName = "<lang:${event.entity.type.translationKey()}>"
             val playerName = killer.name
             Bukkit.getScheduler().runTaskLater(this, Runnable {
                 val message = MiniMessage.miniMessage().deserialize(
                     "$playerName <bold><gradient:#ffaaaa:#ff1111>GOT REVENGE ON</gradient></bold> $displayName")
+                Bukkit.getServer().broadcast(message)
+            }, 1L)
+        }
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    fun checkForPlayerRevenge(event: PlayerDeathAfterKnockDownEvent) {
+        val killer = cachedKillers[event.player.uniqueId]
+        if (killer == null || !killer.isPlayer)
+            return
+        val killerUuid = UUID.fromString(killer.id)
+
+        val tracker = deathTracker[killerUuid] ?: return
+        val timesKilled = tracker[event.player.uniqueId.toString()] ?: 0
+        tracker.remove(event.player.uniqueId.toString())
+        deathTracker[killerUuid] = tracker
+
+        if (timesKilled >= DOMINATION_AT) {
+            Bukkit.getScheduler().runTaskLater(this, Runnable {
+                val offlineKiller = Bukkit.getServer().getOfflinePlayer(killerUuid)
+                val killerName = offlineKiller.name ?: return@Runnable
+                val message = MiniMessage.miniMessage().deserialize(
+                    "$killerName <bold><gradient:#ffaaaa:#ff1111>GOT REVENGE ON</gradient></bold> ${event.player.name}")
                 Bukkit.getServer().broadcast(message)
             }, 1L)
         }
