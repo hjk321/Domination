@@ -248,9 +248,9 @@ class Domination : JavaPlugin(), Listener {
 
         val tracker = deathTracker[killer.uniqueId] ?: return
         val timesKilled = tracker[key] ?: 0
+        tracker.remove(key) // Clear the domination streak
 
         if (timesKilled >= DOMINATION_AT) {
-            tracker.remove(key) // Clear the domination streak
             val displayName = "<lang:${event.entity.type.translationKey()}>"
             val playerName = killer.name
             Bukkit.getScheduler().runTaskLater(this, Runnable {
